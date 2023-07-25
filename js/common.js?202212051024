@@ -1,0 +1,246 @@
+// JavaScript Document
+
+// ドロワーメニュー（SP）
+//==========================================================================================
+// ドロワーメニューが開いているときは背景のbody要素をスクロールさせないためのクラスを付与
+// [2022.01.21] iOS 15.0-15.3で起こっていた問題から、html要素ではなくbody要素に.is-nav-openクラスを付与してposition:fixed;は使わない方式に変更。現時点でSafariで対応してないCSSプロパティが含まれているのでSafariでは背面が動いてしまうけど、動きにくくはなる。Chromeはスクロールを止められる。
+// [2022.07.19] ハンバーガー内のアンカーリンクがタブで且つ同一ページというアンカーを続けて押すとSPの時に2回に1回うまくスクロールしないため、topプロパティを使ってスクロール位置を戻す方法を撤廃
+jQuery(function ($) {
+  $('.js-btnHamburger, .nav-close').click(function () {
+    const btnHamburger = $('.js-btnHamburger');
+    if (btnHamburger.attr('aria-expanded') === 'false') {
+      $('body').addClass('is-nav-open');
+      btnHamburger.removeClass('load').attr('aria-expanded', true);
+    } else {
+      $('body').removeClass('is-nav-open');
+      btnHamburger.attr('aria-expanded', false);
+    }
+  });
+
+  /* ブラウザバックしたときにiOSでメニューが開いたままになるドロワーを閉じる（主にiOS対策）
+     ※ window.onpageshow では2回以上戻ったときに効かないとのことで popstate を使用
+     popstateはアドレスバーが変わると発火する（同一ページ内のアンカーリンクや別タブへのアンカーも）ので、スムーススクロールのスクリプトにa要素のデフォルト動作（アドレスバーの状態を変更）させずに終了する return false; などをつけるか、もしくは発火しても問題ない動作にする */
+  history.replaceState(null, document.getElementsByTagName('title')[0].innerHTML, null);
+  window.addEventListener('popstate', function(e) {
+    // ドロワーメニューを閉じる
+    $(".js-btnHamburger").each(function(i, elem) {
+      $('body').removeClass('is-nav-open');
+      $(elem).attr('aria-expanded', false);
+    });
+  });
+});
+
+// ドロップダウンメニュー（PC）
+//==========================================================================================
+$(window).on('load', function () {
+  const mq = window.matchMedia('(min-width:768px)');
+  const parent = $('.gNav li.-parent');
+
+  // ページ読み込み時に一瞬表示されてしまうことがあるのでCSSでdisplay:none;にしてあるのをJSが読み込まれたらフェードインを指定しておき解除する
+  if (mq.matches) {
+    // 初期設定
+    $('.gNav .sub').addClass('load').attr('aria-hidden', true);
+    parent.attr('aria-expanded', false);
+    parent.children('a').attr('aria-haspopup', true);
+
+    // hoverでaria属性操作（トリガーをa要素にするとhoverが外れて閉じてしまうのでli要素に）
+    parent.hover(function(){
+        $('.sub:not(:animated)', this).attr('aria-hidden', false);
+        $(this).attr('aria-expanded', true);
+      },
+      function(){
+        $('.sub', this).attr('aria-hidden', true);
+        $(this).attr('aria-expanded', false);
+      }
+    );
+  }
+
+  // キーボード操作でも開閉させる
+  $('.gNav li.-parent > a').on('click',function(){
+    if (mq.matches) {
+      // クリックした要素の次の要素が表示状態だった場合
+      if ($(this).next().is('[aria-hidden=false]')) {
+        // 閉じる
+        $(this).siblings('.sub').attr('aria-hidden', true);
+        $(this).closest('.-parent').attr('aria-expanded', false);
+      } else {
+        // 表示状態ではなかった場合は開く
+        $(this).siblings('.sub').attr('aria-hidden', false);
+        $(this).closest('.-parent').attr('aria-expanded', true);
+      }
+
+      // 他の子要素は閉じる
+      $(this).closest('li').siblings('.-parent').attr('aria-expanded', false).find('.sub').attr('aria-hidden', true);
+    }
+    return false; // a要素アンカーの標準動作をキャンセル(ここだけSPも含む)
+  });
+});
+
+
+// フェードインの汎用トリガー
+//==========================================================================================
+jQuery(function ($) {
+  $(window).scroll(function () {
+
+    var elem = $('.js-fadeIn');
+
+    elem.each(function () {
+      var active = 'active';
+      var scrollPos = $(window).scrollTop();
+      var elemOffset = $(this).offset().top;
+      var wh = $(window).height();
+
+      if (scrollPos > elemOffset - wh + (wh / 8)) {
+        // 画面の下から1/8の位置まできたら発動
+        $(this).addClass(active);
+      }
+    });
+  });
+  $(window).scroll(); // ファーストビューに該当要素が入っている場合に即時に呼び出す
+});
+
+
+
+// ページトップへ戻るボタン
+//==========================================================================================
+jQuery(function ($) {
+  //トップへ戻るボタン
+  const topBtn = $('.js-page-top');
+  const active = 'is-scroll';
+  //スクロールが200に達したらボタン表示
+  $(window).scroll(function () {
+    if ($(this).scrollTop() > 200) {
+      topBtn.addClass(active);
+    } else {
+      topBtn.removeClass(active);
+    }
+  });
+  //スクロールしてトップ
+  topBtn.click(function () {
+    $('body,html').animate({
+      scrollTop: 0
+    }, 500);
+    return false;
+  });
+});
+
+
+
+// ページ内スムーススクロール
+//==========================================================================================
+$(function () {
+  $('a[href^="#"]').not('[role=tab], .gNav .-parent > a').click(function () {
+    const href = $(this).attr("href");
+    const target = $(href === '#' ? 'html' : href);
+
+    if (!target.length) return false;
+    const tt = target.offset().top;
+    $('body,html').stop().animate({ scrollTop: tt - 10 }, 500, 'swing');
+  });
+});
+
+
+
+// トップページお知らせ 開閉
+//==========================================================================================
+jQuery(function($) {
+  const tab = $(".news_title"),
+    panel = $(".news_body");
+
+  // 初期設定(3件目以降に閉じる属性付与)
+  tab.slice(2).attr({
+    'aria-selected': false,
+    'aria-expanded': false
+  });
+  // 最初の2件をオープン（終了位置数字は"未満"の数）
+  tab.slice(0, 2).delay(250).queue(function(){
+    $(this).attr({
+      'aria-selected': true,
+      'aria-expanded': true
+    }).addClass('open').next().slideDown(0, 'swing');
+  });
+  panel.slice(2).hide().attr('aria-hidden', true);
+  panel.slice(0, 2).attr('aria-hidden', false);
+
+  // Enterキーでもクリックイベントが発動するようにする
+  tab.keydown(function (e) {
+    if (e.key === 'Enter') {
+      $(this).click();
+    }
+  });
+
+  // タイトルクリックで開閉
+  tab.on('click', function () {
+    // クリックした要素の次の要素が表示状態だった場合
+    if ($(this).next().is(':visible')) {
+      // 閉じる
+      $(this).attr({
+        'aria-selected': false,
+        'aria-expanded': false
+      });
+      $(this).next().attr('aria-hidden', true);
+      $(this).removeClass('open').next().slideUp(350, 'swing');
+    } else {
+      // 表示状態ではなかった場合は開く
+      $(this).attr({
+        'aria-selected': true,
+        'aria-expanded': true
+      });
+      $(this).next().attr('aria-hidden', false);
+      $(this).addClass('open').next().slideDown(350, 'swing');
+    }
+  });
+});
+
+
+
+// アコーディオンの開閉（トップページ、など）
+//==========================================================================================
+jQuery(function($) {
+  const tab = $(".js-acc-tab"),
+    panel = $(".js-acc-panel");
+
+  // 初期設定
+  tab.attr({
+    'aria-selected': false,
+    'aria-expanded': false
+  });
+  panel.hide().attr('aria-hidden', true);
+
+  // タイトルクリックで開閉
+  tab.on('click', function () {
+    // クリックした要素の次の要素が表示状態だった場合
+    if ($(this).next().is(':visible')) {
+      // 閉じる
+      $(this).attr({
+        'aria-selected': false,
+        'aria-expanded': false
+      });
+      $(this).next().attr('aria-hidden', true);
+      $(this).removeClass('open').next().slideUp(350, 'swing');
+    } else {
+      // 表示状態ではなかった場合は開く
+      $(this).attr({
+        'aria-selected': true,
+        'aria-expanded': true
+      });
+      $(this).next().attr('aria-hidden', false);
+      $(this).addClass('open').next().slideDown(350, 'swing');
+    }
+  });
+});
+
+
+
+// スマホのとき.telクラスをリンクでラップ
+//==========================================================================================
+if (navigator.userAgent.match(/(iPhone|Android|Mobile)/)) {
+  $('.tel, .tel2').each(function () {
+    var str = $(this).html();
+    if ($(this).children().is('img')) {
+      $(this).html($('<a class="link-tel">').attr('href', 'tel:' + $(this).children().attr('alt').replace(/-/g, '')).append(str + '</a>'));
+    } else {
+      $(this).html($('<a class="link-tel">').attr('href', 'tel:' + $(this).text().replace(/-/g, '')).append(str + '</a>'));
+    }
+  });
+}
